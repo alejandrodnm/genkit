@@ -46,6 +46,9 @@ InitT = TypeVar('InitT')
 
 def to_dict(obj: Any) -> Any:  # noqa: ANN401
     """Convert object to dict if it's a Pydantic model, otherwise return as-is."""
+    raw = getattr(obj, 'raw', None)
+    if isinstance(raw, BaseModel):
+        return raw.model_dump(by_alias=True, exclude_none=True)
     return obj.model_dump(by_alias=True, exclude_none=True) if isinstance(obj, BaseModel) else obj
 
 
@@ -136,7 +139,7 @@ async def to_sse(turn: StreamHandle) -> AsyncIterator[str]:
         result = await turn.response
         yield format_stream_result(result)
     except Exception as e:
-        log_served_failure(adapter_logger=logger, error=e, where='stream')
+        _log_failure(error=e, where='stream')
         yield format_stream_error(e)
 
 
