@@ -143,9 +143,9 @@
 
 ::: genkit.evaluator.BaseDataPoint
 
-::: genkit.evaluator.EvalRequest
+::: genkit.evaluator.EvaluatorRequest
 
-::: genkit.evaluator.EvalFnResponse
+::: genkit.evaluator.EvaluatorResponse
 
 ::: genkit.evaluator.Score
 
@@ -153,7 +153,9 @@
 
 ::: genkit.evaluator.ScoreStatus
 
-::: genkit.evaluator.evaluator_action_metadata
+::: genkit.evaluator.Evaluator
+
+::: genkit.evaluator.BatchEvaluator
 
 ::: genkit.evaluator.EvaluatorRef
 
