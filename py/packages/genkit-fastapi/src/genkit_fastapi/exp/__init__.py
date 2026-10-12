@@ -29,7 +29,7 @@ return StreamingResponse(to_sse(chat.send_stream('Weather in Paris?')), media_ty
 ```
 """
 
-from ..handler import to_sse
+from .._handler import to_sse
 from ._agent import serve_agent
 
 __all__ = [
