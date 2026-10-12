@@ -105,44 +105,59 @@ app.include_router(
 )
 ```
 
-### Your own route (`handle_genkit_request`)
+### Streaming from Custom Routes (`stream.to_sse()`)
 
-FastAPI owns the route. We own the turn. Build auth and session however you like, then call this:
+Call `.to_sse()` on any `StreamResponse` (`flow.stream()`, `ai.generate_stream()`) or `AgentTurn` (`chat.send_stream()`) to frame chunks, the final result, and errors as Genkit SSE events (`data: {"message": ...}`, `data: {"result": ...}`, or `data: {"error": ...}`) inside your own FastAPI route:
+
+```python
+from fastapi import Depends, FastAPI
+from fastapi.responses import StreamingResponse
+from genkit import FlowContext, Genkit
+
+ai = Genkit(...)
+app = FastAPI()
+
+
+@ai.flow
+async def deploy_service(service: str, ctx: FlowContext[str]) -> str:
+    user_id = ctx.context['user_id']
+    ctx.send_chunk(f'[{user_id}] building {service}')
+    ctx.send_chunk(f'[{user_id}] rolling out {service}')
+    return f'https://{service}.run.app'
+
+
+@app.post('/deploy/stream')
+async def deploy_stream(service: str, user: User = Depends(current_user)):
+    stream = deploy_service.stream(service, context={'user_id': user.id})
+    return StreamingResponse(stream.to_sse(), media_type='text/event-stream')
+    # => data: {"message": "[u_42] building payments"}
+    # => data: {"message": "[u_42] rolling out payments"}
+    # => data: {"result": "https://payments.run.app"}
+
+
+@app.post('/chat/stream')
+async def chat_stream(prompt: str, user: User = Depends(current_user)):
+    stream = ai.generate_stream(prompt=prompt, context={'user_id': user.id})
+    return StreamingResponse(stream.to_sse(), media_type='text/event-stream')
+```
+
+### Handling Full Genkit Requests (`handle_genkit_request`)
+
+When FastAPI owns the route signature and `Depends(...)` parameters (for authentication, rate limiting, or database sessions) and you want one endpoint to serve both JSON `POST` (`{"result": ...}`) and SSE streaming (`Accept: text/event-stream` or `?stream=true`), delegate the HTTP turn to `handle_genkit_request`:
 
 ```python
 from fastapi import Depends, Request
 from genkit_fastapi import handle_genkit_request
 
 
-@app.post('/api/weatherAgent', response_model=None)
-async def turn(request: Request, user=Depends(current_user)):
+@app.post('/api/deploy', response_model=None)
+async def deploy_endpoint(request: Request, user: User = Depends(current_user)):
     return await handle_genkit_request(
         request,
-        action=weather_agent,
-        context={'uid': user.id},
+        action=deploy_service,
+        context={'user_id': user.id},
     )
 ```
-
-JSON in, SSE or `{"result": ...}` out — same wire as `serve_flow` / `serve_agent`.
-
-### Framing a stream (`to_sse`)
-
-A chunk is not HTTP. `to_sse` turns `generate_stream` / `chat.send_stream` into the same SSE lines those routes send. It is experimental, so it comes from `genkit_fastapi.exp`:
-
-```python
-from fastapi.responses import StreamingResponse
-from genkit_fastapi.exp import to_sse
-
-turn = chat.send_stream('Weather in Paris?')
-
-async def frames():
-    async for line in to_sse(turn):
-        yield line
-
-return StreamingResponse(frames(), media_type='text/event-stream')
-```
-
-Each chunk is `data: {"message": ...}`. The settled turn is `data: {"result": ...}`. A failure is `data: {"error": ...}`.
 
 ### Decorator Handler (`genkit_fastapi_handler`)
 
